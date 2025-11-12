@@ -1,0 +1,6 @@
+(start-task t1 op1 m1)
+(finish-task t1 op1 m1)
+(start-task t2 op1 m1)
+(finish-task t2 op1 m1)
+(start-task t3 op1 m1)
+(finish-task t3 op1 m1)
