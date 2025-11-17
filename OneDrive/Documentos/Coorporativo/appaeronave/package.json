@@ -1,0 +1,34 @@
+{
+  "name": "aerocost",
+  "version": "1.0.0",
+  "description": "Sistema de Controle de Custos Operacionais de Aeronaves",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "migrate": "node src/database/migrate.js",
+    "check-tables": "node src/database/check-tables.js",
+    "test": "node test-all.js"
+  },
+  "keywords": [
+    "aviation",
+    "costs",
+    "aircraft",
+    "operations"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
+
