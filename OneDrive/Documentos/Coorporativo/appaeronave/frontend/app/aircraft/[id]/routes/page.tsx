@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Plus, Save, Trash2 } from 'lucide-react';
+import { Plus, Save, Trash2, Route as RouteIcon } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -213,7 +213,7 @@ export default function RoutesPage() {
         <Card className="shadow-sm">
           {routes.length === 0 ? (
             <div className="text-center py-12">
-              <Route className="w-16 h-16 text-text-light mx-auto mb-4" />
+              <RouteIcon className="w-16 h-16 text-text-light mx-auto mb-4" />
               <h3 className="text-base font-semibold text-text mb-2">Nenhuma rota cadastrada</h3>
               <p className="text-text-light mb-6">
                 Cadastre rotas para calcular custos específicos por trajeto.
@@ -237,18 +237,20 @@ export default function RoutesPage() {
                       DECEA: R$ {route.decea_per_hour.toFixed(2)}/hora
                     </div>
                   </div>
-                  <div className="flex gap-2 w-full sm:w-auto">
+                  <div className="flex gap-1.5 w-full sm:w-auto">
                     <Button
-                      variant="outline"
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleEdit(route)}
-                      className="text-sm"
+                      className="text-gray-600 hover:text-primary hover:bg-gray-50"
                     >
                       Editar
                     </Button>
                     <Button
-                      variant="outline"
+                      variant="ghost"
+                      size="sm"
                       onClick={() => route.id && handleDelete(route.id)}
-                      className="text-sm text-red-600 hover:text-red-700"
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
                       icon={<Trash2 className="w-4 h-4" />}
                     >
                       Excluir

@@ -41,6 +41,17 @@ export default function FlightsPage() {
     loadData();
   }, [aircraftId]);
 
+  // Função para formatar data corretamente (evita problema de timezone)
+  const formatDate = (dateString: string): string => {
+    // Se a data já está no formato YYYY-MM-DD, extrai as partes e cria como local
+    if (dateString.includes('T')) {
+      dateString = dateString.split('T')[0];
+    }
+    const [year, month, day] = dateString.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.toLocaleDateString('pt-BR');
+  };
+
   const loadData = async () => {
     try {
       setLoadingData(true);
@@ -380,7 +391,7 @@ export default function FlightsPage() {
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <Calendar className="w-4 h-4 text-text-light" />
-                          {new Date(flight.flight_date).toLocaleDateString('pt-BR')}
+                          {formatDate(flight.flight_date)}
                         </div>
                       </td>
                       <td className="py-3 px-4">
@@ -416,29 +427,32 @@ export default function FlightsPage() {
                         </span>
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex justify-end gap-1.5">
                           {flight.flight_type === 'planned' && (
                             <Button
-                              variant="outline"
+                              variant="ghost"
                               size="sm"
                               onClick={() => handleMarkAsCompleted(flight)}
                               icon={<CheckCircle2 className="w-4 h-4" />}
+                              className="text-green-600 hover:text-green-700 hover:bg-green-50"
                             >
                               Marcar como Realizado
                             </Button>
                           )}
                           <Button
-                            variant="outline"
+                            variant="ghost"
                             size="sm"
                             onClick={() => handleEdit(flight)}
+                            className="text-gray-600 hover:text-primary hover:bg-gray-50"
                           >
                             Editar
                           </Button>
                           <Button
-                            variant="outline"
+                            variant="ghost"
                             size="sm"
                             onClick={() => handleDelete(flight.id!)}
                             icon={<Trash2 className="w-4 h-4" />}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
                           >
                             Excluir
                           </Button>

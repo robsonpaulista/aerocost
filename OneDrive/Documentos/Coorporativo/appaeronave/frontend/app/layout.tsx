@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import ServiceWorkerCleanup from '../components/ServiceWorkerCleanup'
+import { AuthProvider } from '../contexts/AuthContext'
 import { AircraftProvider } from '../contexts/AircraftContext'
 
 export const metadata: Metadata = {
@@ -17,9 +18,11 @@ export default function RootLayout({
     <html lang="pt-BR">
       <body className="antialiased">
         <ServiceWorkerCleanup />
-        <AircraftProvider>
-          {children}
-        </AircraftProvider>
+        <AuthProvider>
+          <AircraftProvider>
+            {children}
+          </AircraftProvider>
+        </AuthProvider>
       </body>
     </html>
   )

@@ -9,6 +9,11 @@ const nextConfig = {
     maxInactiveAge: 25 * 1000,
     pagesBufferLength: 2,
   },
+  // Configuração para desenvolvimento com rede local
+  allowedDevOrigins: [
+    'http://192.168.3.247:3002',
+    'http://localhost:3002',
+  ],
 }
 
 module.exports = nextConfig

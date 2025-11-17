@@ -112,27 +112,30 @@ export default function NewAircraftPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex gap-2 ml-4">
+                  <div className="flex gap-1.5 ml-4">
                     <Button
-                      variant="outline"
+                      variant="ghost"
+                      size="sm"
                       onClick={() => router.push(`/aircraft/${aircraft.id}`)}
-                      className="text-sm"
+                      className="text-gray-600 hover:text-primary hover:bg-gray-50"
                     >
                       Ver
                     </Button>
                     <Button
-                      variant="outline"
+                      variant="ghost"
+                      size="sm"
                       onClick={() => router.push(`/aircraft/${aircraft.id}/edit`)}
-                      className="text-sm"
+                      className="text-gray-600 hover:text-primary hover:bg-gray-50"
                       icon={<Edit className="w-4 h-4" />}
                     >
                       Editar
                     </Button>
                     <Button
-                      variant="outline"
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleDelete(aircraft.id)}
                       disabled={deletingId === aircraft.id}
-                      className="text-sm text-red-600 hover:text-red-700"
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
                       icon={<Trash2 className="w-4 h-4" />}
                     >
                       {deletingId === aircraft.id ? 'Excluindo...' : 'Excluir'}

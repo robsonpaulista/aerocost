@@ -172,8 +172,8 @@ export default function AircraftDetailPage() {
               className="space-y-4"
             >
               <div className="flex items-center justify-between">
-                <div className="p-3 bg-purple-100 rounded-lg">
-                  <Route className="w-6 h-6 text-purple-600" />
+                <div className="p-3 bg-blue-100 rounded-lg">
+                  <Route className="w-6 h-6 text-blue-600" />
                 </div>
                 <Button variant="outline" icon={<Plus className="w-4 h-4" />}>
                   {routes.length > 0 ? `${routes.length} rotas` : 'Cadastrar'}

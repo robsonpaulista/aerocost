@@ -11,26 +11,67 @@ import {
   ChevronDown,
   ChevronRight,
   Calendar,
+  Filter,
+  X,
+  Edit,
+  Save,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import AppLayout from '@/components/AppLayout';
 import { useAircraft } from '@/contexts/AircraftContext';
-import { dashboardApi, flightApi, calculationApi } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { dashboardApi, flightApi, calculationApi, routeApi } from '@/lib/api';
 
 export default function Home() {
   const router = useRouter();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const { selectedAircraftId } = useAircraft();
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [expandedFlights, setExpandedFlights] = useState<Set<string>>(new Set());
   const [flightDetails, setFlightDetails] = useState<Record<string, any>>({});
+  const [dateFilterStart, setDateFilterStart] = useState<string>('');
+  const [dateFilterEnd, setDateFilterEnd] = useState<string>('');
+  const [showEditModal, setShowEditModal] = useState<boolean>(false);
+  const [editingFlight, setEditingFlight] = useState<any>(null);
+  const [routes, setRoutes] = useState<any[]>([]);
+  const [formData, setFormData] = useState({
+    origin: '',
+    destination: '',
+    flight_date: '',
+    leg_time: 0,
+    actual_leg_time: null as number | null,
+    route_id: null as string | null,
+    notes: null as string | null,
+  });
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+  const [editLoading, setEditLoading] = useState<boolean>(false);
+
+  // Verifica autenticação e redireciona para login se necessário
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push('/login');
+    }
+  }, [isAuthenticated, authLoading, router]);
 
   useEffect(() => {
-    if (selectedAircraftId) {
+    if (selectedAircraftId && isAuthenticated) {
       loadDashboard();
+      loadRoutes();
     }
-  }, [selectedAircraftId]);
+  }, [selectedAircraftId, isAuthenticated]);
+
+  const loadRoutes = async () => {
+    if (!selectedAircraftId) return;
+    try {
+      const routesData = await routeApi.list(selectedAircraftId);
+      setRoutes(routesData || []);
+    } catch (error) {
+      console.error('Erro ao carregar rotas:', error);
+    }
+  };
 
   const loadDashboard = async () => {
     if (!selectedAircraftId) return;
@@ -74,6 +115,109 @@ export default function Home() {
     }
   };
 
+  // Função para formatar data corretamente (evita problema de timezone)
+  const formatDate = (dateString: string): string => {
+    // Se a data já está no formato YYYY-MM-DD, extrai as partes e cria como local
+    if (dateString.includes('T')) {
+      dateString = dateString.split('T')[0];
+    }
+    const [year, month, day] = dateString.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.toLocaleDateString('pt-BR');
+  };
+
+  // Função para criar Date object a partir de string YYYY-MM-DD (tratando como local)
+  const parseLocalDate = (dateString: string): Date => {
+    if (dateString.includes('T')) {
+      dateString = dateString.split('T')[0];
+    }
+    const [year, month, day] = dateString.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
+  // Função para filtrar voos por data
+  const filterFlightsByDate = (flights: any[]) => {
+    if (!dateFilterStart && !dateFilterEnd) {
+      return flights;
+    }
+
+    return flights.filter((flight: any) => {
+      const flightDate = parseLocalDate(flight.flight_date);
+      const startDate = dateFilterStart ? parseLocalDate(dateFilterStart) : null;
+      const endDate = dateFilterEnd ? parseLocalDate(dateFilterEnd) : null;
+
+      if (startDate && endDate) {
+        // Filtro por intervalo
+        return flightDate >= startDate && flightDate <= endDate;
+      } else if (startDate) {
+        // Apenas data inicial
+        return flightDate >= startDate;
+      } else if (endDate) {
+        // Apenas data final
+        return flightDate <= endDate;
+      }
+
+      return true;
+    });
+  };
+
+  const handleEditFlight = (flight: any) => {
+    setEditingFlight(flight);
+    setFormData({
+      origin: flight.origin,
+      destination: flight.destination,
+      flight_date: flight.flight_date.split('T')[0],
+      leg_time: flight.leg_time,
+      actual_leg_time: flight.actual_leg_time || null,
+      route_id: flight.route_id || null,
+      notes: flight.notes || null,
+    });
+    setShowEditModal(true);
+    setEditErrors({});
+  };
+
+  const handleCloseEditModal = () => {
+    setShowEditModal(false);
+    setEditingFlight(null);
+    setFormData({
+      origin: '',
+      destination: '',
+      flight_date: '',
+      leg_time: 0,
+      actual_leg_time: null,
+      route_id: null,
+      notes: null,
+    });
+    setEditErrors({});
+  };
+
+  const handleUpdateFlight = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingFlight) return;
+
+    setEditLoading(true);
+    setEditErrors({});
+
+    try {
+      await flightApi.update(editingFlight.id, formData);
+      await loadDashboard();
+      handleCloseEditModal();
+    } catch (error: any) {
+      console.error('Erro ao atualizar voo:', error);
+      if (error.response?.data?.details) {
+        const fieldErrors: Record<string, string> = {};
+        error.response.data.details.forEach((detail: any) => {
+          fieldErrors[detail.path[0]] = detail.message;
+        });
+        setEditErrors(fieldErrors);
+      } else {
+        setEditErrors({ general: error.response?.data?.error || 'Erro ao atualizar voo' });
+      }
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
   const toggleFlightExpansion = async (flightId: string, flight: any) => {
     const isExpanded = expandedFlights.has(flightId);
     const newExpanded = new Set(expandedFlights);
@@ -101,6 +245,11 @@ export default function Home() {
     setExpandedFlights(newExpanded);
   };
 
+
+  // Não renderiza nada enquanto verifica autenticação ou se não estiver autenticado
+  if (authLoading || !isAuthenticated) {
+    return null;
+  }
 
   return (
     <AppLayout>
@@ -254,7 +403,7 @@ export default function Home() {
                 </div>
 
                 {/* Resumo Total */}
-                <div className="bg-primary/10 rounded-lg p-4 mt-6">
+                <div className="bg-blue-50 rounded-lg p-4 mt-6">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-semibold text-text">Custo Total por Hora:</span>
                     <span className="text-base font-semibold text-primary">
@@ -268,10 +417,54 @@ export default function Home() {
             {/* Seção: Voos Realizados */}
             {dashboardData.completedFlights && dashboardData.completedFlights.length > 0 && (
               <Card title="Voos Realizados" className="mt-6 shadow-sm">
+                {/* Filtro de Data */}
+                <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <div className="flex items-center gap-2 text-sm font-medium text-text">
+                      <Filter className="w-4 h-4" />
+                      <span>Filtrar por Data:</span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 flex-1">
+                      <div className="flex-1 sm:flex-initial">
+                        <label className="block text-xs text-text-light mb-0.5">Data Inicial</label>
+                        <input
+                          type="date"
+                          value={dateFilterStart}
+                          onChange={(e) => setDateFilterStart(e.target.value)}
+                          className="w-full sm:w-auto px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                        />
+                      </div>
+                      <div className="flex-1 sm:flex-initial">
+                        <label className="block text-xs text-text-light mb-0.5">Data Final</label>
+                        <input
+                          type="date"
+                          value={dateFilterEnd}
+                          onChange={(e) => setDateFilterEnd(e.target.value)}
+                          min={dateFilterStart || undefined}
+                          className="w-full sm:w-auto px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                        />
+                      </div>
+                      {(dateFilterStart || dateFilterEnd) && (
+                        <button
+                          onClick={() => {
+                            setDateFilterStart('');
+                            setDateFilterEnd('');
+                          }}
+                          className="mt-4 sm:mt-0 px-2.5 py-1.5 text-xs text-text-light hover:text-text transition-colors flex items-center gap-1"
+                          title="Limpar filtro"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          Limpar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 {/* Vista Mobile - Cards */}
                 <div className="md:hidden space-y-4">
-                  {dashboardData.completedFlights
-                    .sort((a: any, b: any) => new Date(b.flight_date).getTime() - new Date(a.flight_date).getTime())
+                  {filterFlightsByDate(dashboardData.completedFlights)
+                    .sort((a: any, b: any) => parseLocalDate(b.flight_date).getTime() - parseLocalDate(a.flight_date).getTime())
                     .map((flight: any) => {
                       const isExpanded = expandedFlights.has(flight.id);
                       const details = flightDetails[flight.id];
@@ -286,19 +479,54 @@ export default function Home() {
                               </div>
                               <div className="flex items-center gap-2 text-xs text-text-light">
                                 <Calendar className="w-3 h-3" />
-                                {new Date(flight.flight_date).toLocaleDateString('pt-BR')}
+                                {formatDate(flight.flight_date)}
                               </div>
                             </div>
-                            <button
-                              onClick={() => toggleFlightExpansion(flight.id, flight)}
-                              className="p-1 hover:bg-gray-200 rounded transition-colors"
-                            >
-                              {isExpanded ? (
-                                <ChevronDown className="w-4 h-4 text-text-light" />
-                              ) : (
-                                <ChevronRight className="w-4 h-4 text-text-light" />
-                              )}
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => handleEditFlight(flight)}
+                                className="px-2.5 py-1 text-xs font-medium text-gray-700 hover:text-primary hover:bg-gray-50 rounded-md transition-all duration-150 hidden sm:inline-flex items-center gap-1"
+                                title="Editar voo"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                                Editar
+                              </button>
+                              <button
+                                onClick={() => handleEditFlight(flight)}
+                                className="p-1.5 text-gray-600 hover:text-primary hover:bg-gray-50 rounded-md transition-all duration-150 sm:hidden"
+                                title="Editar voo"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => toggleFlightExpansion(flight.id, flight)}
+                                className="px-2.5 py-1 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-all duration-150 hidden sm:inline-flex items-center gap-1"
+                                title={isExpanded ? "Recolher detalhes" : "Expandir detalhes"}
+                              >
+                                {isExpanded ? (
+                                  <>
+                                    <ChevronDown className="w-3.5 h-3.5" />
+                                    Ocultar
+                                  </>
+                                ) : (
+                                  <>
+                                    <ChevronRight className="w-3.5 h-3.5" />
+                                    Detalhes
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                onClick={() => toggleFlightExpansion(flight.id, flight)}
+                                className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-all duration-150 sm:hidden"
+                                title={isExpanded ? "Recolher detalhes" : "Expandir detalhes"}
+                              >
+                                {isExpanded ? (
+                                  <ChevronDown className="w-4 h-4" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4" />
+                                )}
+                              </button>
+                            </div>
                           </div>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2 text-xs text-text-light">
@@ -330,7 +558,7 @@ export default function Home() {
                                     <p className="font-medium">R$ {details.deceaPerHour?.toFixed(2)}</p>
                                   </div>
                                 </div>
-                                <div className="bg-primary/10 rounded p-2">
+                                <div className="bg-blue-50 rounded p-2">
                                   <p className="text-text-light text-xs mb-1">Custo Total do Voo</p>
                                   <p className="text-base font-semibold text-primary">
                                     R$ {details.totalLegCost?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -357,8 +585,8 @@ export default function Home() {
                       </tr>
                     </thead>
                     <tbody>
-                      {dashboardData.completedFlights
-                        .sort((a: any, b: any) => new Date(b.flight_date).getTime() - new Date(a.flight_date).getTime())
+                      {filterFlightsByDate(dashboardData.completedFlights)
+                        .sort((a: any, b: any) => parseLocalDate(b.flight_date).getTime() - parseLocalDate(a.flight_date).getTime())
                         .map((flight: any) => {
                           const isExpanded = expandedFlights.has(flight.id);
                           const details = flightDetails[flight.id];
@@ -367,22 +595,38 @@ export default function Home() {
                             <>
                               <tr key={flight.id} className="border-b border-gray-100 hover:bg-gray-50">
                                 <td className="py-3 px-4">
-                                  <button
-                                    onClick={() => toggleFlightExpansion(flight.id, flight)}
-                                    className="p-1 hover:bg-gray-200 rounded transition-colors"
-                                    title={isExpanded ? "Recolher detalhes" : "Expandir detalhes"}
-                                  >
-                                    {isExpanded ? (
-                                      <ChevronDown className="w-4 h-4 text-text-light" />
-                                    ) : (
-                                      <ChevronRight className="w-4 h-4 text-text-light" />
-                                    )}
-                                  </button>
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      onClick={() => handleEditFlight(flight)}
+                                      className="px-2.5 py-1 text-xs font-medium text-gray-700 hover:text-primary hover:bg-gray-50 rounded-md transition-all duration-150 inline-flex items-center gap-1"
+                                      title="Editar voo"
+                                    >
+                                      <Edit className="w-3.5 h-3.5" />
+                                      Editar
+                                    </button>
+                                    <button
+                                      onClick={() => toggleFlightExpansion(flight.id, flight)}
+                                      className="px-2.5 py-1 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-all duration-150 inline-flex items-center gap-1"
+                                      title={isExpanded ? "Recolher detalhes" : "Expandir detalhes"}
+                                    >
+                                      {isExpanded ? (
+                                        <>
+                                          <ChevronDown className="w-3.5 h-3.5" />
+                                          Ocultar
+                                        </>
+                                      ) : (
+                                        <>
+                                          <ChevronRight className="w-3.5 h-3.5" />
+                                          Detalhes
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
                                 </td>
                                 <td className="py-3 px-4">
                                   <div className="flex items-center gap-2">
                                     <Calendar className="w-4 h-4 text-text-light" />
-                                    {new Date(flight.flight_date).toLocaleDateString('pt-BR')}
+                                    {formatDate(flight.flight_date)}
                                   </div>
                                 </td>
                                 <td className="py-3 px-4">
@@ -526,7 +770,7 @@ export default function Home() {
 
                                       {/* Cálculo Final */}
                                       <div className="border-t border-gray-200 pt-4">
-                                        <div className="bg-primary/10 rounded-lg p-4">
+                                        <div className="bg-blue-50 rounded-lg p-4">
                                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                                             <div>
                                               <p className="text-text-light mb-1">Custo Total por Hora:</p>
@@ -559,10 +803,10 @@ export default function Home() {
                     <tfoot>
                       <tr className="bg-gray-50">
                         <td colSpan={4} className="py-3 px-4 font-semibold text-text">
-                          Total:
+                          Total {dateFilterStart || dateFilterEnd ? '(Filtrado)' : ''}:
                         </td>
                         <td className="py-3 px-4 text-right font-bold text-primary">
-                          R$ {dashboardData.completedFlights
+                          R$ {filterFlightsByDate(dashboardData.completedFlights)
                             .reduce((sum: number, flight: any) => {
                               // Usar o valor calculado dos detalhes se disponível, senão usar o cost_calculated
                               const detailCost = flightDetails[flight.id]?.totalLegCost;
@@ -577,13 +821,13 @@ export default function Home() {
                 <div className="mt-4 p-4 bg-blue-50 rounded-lg">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
                     <div className="bg-white rounded-lg p-3">
-                      <p className="text-text-light text-xs mb-1">Total de Voos</p>
-                      <p className="text-base font-semibold text-text">{dashboardData.completedFlights.length}</p>
+                      <p className="text-text-light text-xs mb-1">Total de Voos {dateFilterStart || dateFilterEnd ? '(Filtrado)' : ''}</p>
+                      <p className="text-base font-semibold text-text">{filterFlightsByDate(dashboardData.completedFlights).length}</p>
                     </div>
                     <div className="bg-white rounded-lg p-3">
                       <p className="text-text-light text-xs mb-1">Total de Horas</p>
                       <p className="text-base font-semibold text-text">
-                        {dashboardData.completedFlights
+                        {filterFlightsByDate(dashboardData.completedFlights)
                           .reduce((sum: number, flight: any) => sum + (flight.actual_leg_time || flight.leg_time || 0), 0)
                           .toFixed(2)}h
                       </p>
@@ -591,7 +835,7 @@ export default function Home() {
                     <div className="bg-white rounded-lg p-3">
                       <p className="text-text-light text-xs mb-1">Custo Total</p>
                       <p className="text-base font-semibold text-primary">
-                        R$ {dashboardData.completedFlights
+                        R$ {filterFlightsByDate(dashboardData.completedFlights)
                           .reduce((sum: number, flight: any) => {
                             // Usar o valor calculado dos detalhes se disponível, senão usar o cost_calculated
                             const detailCost = flightDetails[flight.id]?.totalLegCost;
@@ -603,12 +847,14 @@ export default function Home() {
                     <div className="bg-white rounded-lg p-3">
                       <p className="text-text-light text-xs mb-1">Custo Médio por Voo</p>
                       <p className="text-base font-semibold text-text">
-                        R$ {(dashboardData.completedFlights
-                          .reduce((sum: number, flight: any) => {
-                            // Usar o valor calculado dos detalhes se disponível, senão usar o cost_calculated
-                            const detailCost = flightDetails[flight.id]?.totalLegCost;
-                            return sum + (detailCost !== undefined ? detailCost : (flight.cost_calculated || 0));
-                          }, 0) / dashboardData.completedFlights.length)
+                        R$ {(filterFlightsByDate(dashboardData.completedFlights).length > 0
+                          ? filterFlightsByDate(dashboardData.completedFlights)
+                              .reduce((sum: number, flight: any) => {
+                                // Usar o valor calculado dos detalhes se disponível, senão usar o cost_calculated
+                                const detailCost = flightDetails[flight.id]?.totalLegCost;
+                                return sum + (detailCost !== undefined ? detailCost : (flight.cost_calculated || 0));
+                              }, 0) / filterFlightsByDate(dashboardData.completedFlights).length
+                          : 0)
                           .toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                     </div>
@@ -671,7 +917,136 @@ export default function Home() {
               </Card>
             )}
           </>
-        )}
+            )}
+
+            {/* Modal de Edição de Voo */}
+            {showEditModal && editingFlight && (
+              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-6">
+                      <h2 className="text-xl font-bold text-text">Editar Voo</h2>
+                      <button
+                        onClick={handleCloseEditModal}
+                        className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-md transition-all duration-150"
+                        title="Fechar"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleUpdateFlight} className="space-y-4">
+                      {editErrors.general && (
+                        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                          {editErrors.general}
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-text mb-1">
+                            Rota (Opcional)
+                          </label>
+                          <select
+                            value={formData.route_id || ''}
+                            onChange={(e) => setFormData({ ...formData, route_id: e.target.value || null })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                          >
+                            <option value="">Selecione uma rota...</option>
+                            {routes && routes.length > 0 ? (
+                              routes.map((route) => (
+                                <option key={route.id} value={route.id}>
+                                  {route.origin} → {route.destination}
+                                </option>
+                              ))
+                            ) : (
+                              <option value="" disabled>Nenhuma rota cadastrada</option>
+                            )}
+                          </select>
+                        </div>
+
+                        <Input
+                          label="Data do Voo"
+                          type="date"
+                          value={formData.flight_date}
+                          onChange={(e) => setFormData({ ...formData, flight_date: e.target.value })}
+                          error={editErrors.flight_date}
+                          required
+                        />
+
+                        <Input
+                          label="Origem"
+                          value={formData.origin}
+                          onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
+                          error={editErrors.origin}
+                          required
+                        />
+
+                        <Input
+                          label="Destino"
+                          value={formData.destination}
+                          onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+                          error={editErrors.destination}
+                          required
+                        />
+
+                        <Input
+                          label="Tempo de Voo (horas)"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={formData.leg_time || ''}
+                          onChange={(e) => setFormData({ ...formData, leg_time: parseFloat(e.target.value) || 0 })}
+                          error={editErrors.leg_time}
+                          required
+                        />
+
+                        <Input
+                          label="Tempo Real de Voo (horas) - Opcional"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={formData.actual_leg_time || ''}
+                          onChange={(e) => setFormData({ ...formData, actual_leg_time: e.target.value ? parseFloat(e.target.value) : null })}
+                          error={editErrors.actual_leg_time}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-text mb-1">
+                          Observações
+                        </label>
+                        <textarea
+                          value={formData.notes || ''}
+                          onChange={(e) => setFormData({ ...formData, notes: e.target.value || null })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                          rows={3}
+                        />
+                      </div>
+
+                      <div className="flex gap-3 pt-4">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleCloseEditModal}
+                          className="flex-1"
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          type="submit"
+                          loading={editLoading}
+                          className="flex-1"
+                          icon={<Save className="w-4 h-4" />}
+                        >
+                          Salvar Alterações
+                        </Button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            )}
     </AppLayout>
   );
 }
