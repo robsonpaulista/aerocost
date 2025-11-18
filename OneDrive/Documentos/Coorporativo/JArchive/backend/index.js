@@ -14,6 +14,8 @@ import devRoutes from './routes/dev.routes.js';
 import geocodingRoutes from './routes/geocoding.routes.js';
 import debugRoutes from './routes/debug.routes.js';
 import analysisRoutes from './routes/analysis.routes.js';
+import faceRoutes from './routes/face.routes.js';
+import faceRecognitionService from './services/faceRecognition.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,13 +33,44 @@ if (!process.env.GOOGLE_CLIENT_ID || !process.env.SUPABASE_URL) {
 }
 
 // Middlewares
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+// Função para verificar se a origem é permitida (localhost ou rede local)
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Permitir requisições sem origem (ex: Postman, mobile apps)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      process.env.FRONTEND_URL || 'http://localhost:3000',
+      'http://localhost:3000',
+      /^http:\/\/localhost:\d+$/,
+      /^http:\/\/127\.0\.0\.1:\d+$/,
+      /^http:\/\/192\.168\.\d+\.\d+:\d+$/,  // Rede local 192.168.x.x
+      /^http:\/\/10\.\d+\.\d+\.\d+:\d+$/,   // Rede local 10.x.x.x
+      /^http:\/\/172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+:\d+$/, // Rede local 172.16-31.x.x
+      /^https:\/\/.*\.vercel\.app$/,         // Domínios do Vercel
+      /^https:\/\/.*\.vercel\.app\/.*$/      // Domínios do Vercel com path
+    ];
+    
+    const isAllowed = allowedOrigins.some(allowed => {
+      if (typeof allowed === 'string') {
+        return origin === allowed;
+      }
+      return allowed.test(origin);
+    });
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      callback(new Error('Não permitido pelo CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   exposedHeaders: ['Content-Type', 'Content-Length']
-}));
+};
+
+app.use(cors(corsOptions));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -63,6 +96,7 @@ app.use('/api/sync', syncRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/geocoding', geocodingRoutes);
 app.use('/api/analysis', analysisRoutes);
+app.use('/api/faces', faceRoutes);
 
 // Rotas de desenvolvimento (apenas em dev)
 if (process.env.NODE_ENV !== 'production') {
@@ -94,6 +128,14 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`\n🚀 PhotoFinder Backend → http://localhost:${PORT}`);
+  console.log(`🌐 Acessível na rede: http://0.0.0.0:${PORT}`);
+  
+  // Carregar modelos de reconhecimento facial
+  try {
+    await faceRecognitionService.loadModels();
+  } catch (error) {
+    console.error('⚠️  Aviso: Modelos de reconhecimento facial não carregados');
+  }
 });

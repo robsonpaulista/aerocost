@@ -8,11 +8,50 @@ const router = express.Router();
 /**
  * GET /api/auth/url
  * Retorna URL de autenticação do Google
+ * Aceita parâmetro opcional 'redirect_uri' para suportar acesso pela rede interna
  */
 router.get('/url', (req, res) => {
   try {
-    const authUrl = getAuthUrl();
-    res.json({ authUrl });
+    // IMPORTANTE: Google OAuth não aceita IPs privados (192.168.x.x)
+    // Sempre usar localhost para o redirect_uri
+    const backendPort = process.env.BACKEND_PORT || 4000;
+    const redirectUri = `http://localhost:${backendPort}/api/auth/callback`;
+    
+    // Detectar URL do frontend original para redirecionar corretamente após auth
+    const frontendOrigin = req.get('origin') || req.get('referer') || process.env.FRONTEND_URL || 'http://localhost:3000';
+    let frontendUrl = frontendOrigin;
+    let isNetworkAccess = false;
+    
+    try {
+      const originUrl = new URL(frontendOrigin);
+      frontendUrl = `${originUrl.protocol}//${originUrl.host}`;
+      
+      // Verificar se está acessando pela rede (não localhost)
+      isNetworkAccess = !originUrl.hostname.includes('localhost') && 
+                        !originUrl.hostname.includes('127.0.0.1') &&
+                        originUrl.hostname !== '::1';
+      
+      if (isNetworkAccess) {
+        console.warn('⚠️  ATENÇÃO: Acesso pela rede detectado!');
+        console.warn('⚠️  O Google vai redirecionar para localhost, que só funciona no servidor.');
+        console.warn('💡 SOLUÇÃO: Após autenticar no Google, copie a URL completa do callback');
+        console.warn('💡 e acesse diretamente no servidor (ou use ngrok para túnel público)');
+      }
+    } catch (e) {
+      console.warn('⚠️ Não foi possível parsear origin:', e.message);
+    }
+    
+    // Adicionar o frontend_url como parâmetro na URL de auth para usar no callback
+    const authUrl = getAuthUrl(redirectUri, frontendUrl);
+    
+    console.log('✅ Usando redirect_uri (sempre localhost):', redirectUri);
+    console.log('📍 Frontend original:', frontendUrl);
+    
+    res.json({ 
+      authUrl, 
+      redirectUri,
+      warning: isNetworkAccess ? 'Acesso pela rede detectado. Após autenticar, copie a URL do callback e acesse no servidor.' : null
+    });
   } catch (error) {
     console.error('Erro ao gerar URL de autenticação:', error);
     res.status(500).json({ error: 'Falha ao gerar URL de autenticação' });
@@ -24,32 +63,59 @@ router.get('/url', (req, res) => {
  * Callback após autenticação no Google
  */
 router.get('/callback', async (req, res) => {
-  const { code, error: authError } = req.query;
+  const { code, error: authError, state } = req.query;
 
   console.log('=== CALLBACK DE AUTENTICAÇÃO ===');
   console.log('Code recebido:', code ? 'SIM' : 'NÃO');
   console.log('Erro do Google:', authError || 'NENHUM');
+  console.log('State recebido:', state || 'NENHUM');
+
+  // Decodificar state para obter frontendUrl original
+  let frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  if (state) {
+    try {
+      const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
+      if (stateData.frontendUrl) {
+        frontendUrl = stateData.frontendUrl;
+        console.log('📍 Frontend URL do state:', frontendUrl);
+      }
+    } catch (e) {
+      console.warn('⚠️ Não foi possível decodificar state:', e.message);
+    }
+  }
 
   if (authError) {
     console.error('Erro retornado pelo Google:', authError);
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     return res.redirect(`${frontendUrl}?auth=error&reason=${authError}`);
   }
 
   if (!code) {
     console.error('Código de autenticação não fornecido');
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     return res.redirect(`${frontendUrl}?auth=error&reason=no_code`);
   }
 
   try {
-    const tokens = await getTokensFromCode(code);
+    // SEMPRE usar localhost para o redirect_uri (Google não aceita IPs privados)
+    const backendPort = process.env.BACKEND_PORT || 4000;
+    const redirectUri = `http://localhost:${backendPort}/api/auth/callback`;
+    
+    console.log('✅ Usando redirect_uri (localhost):', redirectUri);
+    
+    // Criar cliente OAuth2 com redirect_uri localhost
+    const oauth2ClientForToken = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      redirectUri
+    );
+    
+    const tokenResponse = await oauth2ClientForToken.getToken(code);
+    const tokens = tokenResponse.tokens;
     setCredentials(tokens);
 
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI
+      redirectUri
     );
     oauth2Client.setCredentials(tokens);
     
@@ -85,8 +151,7 @@ router.get('/callback', async (req, res) => {
 
     console.log('Sessão criada com sucesso');
 
-    // Redirecionar para o frontend
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    // Redirecionar para o frontend (já definido acima do try)
     console.log('Redirecionando para:', frontendUrl);
     res.redirect(`${frontendUrl}?auth=success`);
   } catch (error) {
@@ -95,7 +160,6 @@ router.get('/callback', async (req, res) => {
     console.error('Mensagem:', error.message);
     console.error('Stack:', error.stack);
     
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     res.redirect(`${frontendUrl}?auth=error&reason=callback_failed`);
   }
 });

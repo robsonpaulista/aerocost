@@ -22,16 +22,40 @@ export const SCOPES = [
   'https://www.googleapis.com/auth/cloud-vision'  // Necessário para Vision API
 ];
 
-export const getAuthUrl = () => {
-  return oauth2Client.generateAuthUrl({
+export const getAuthUrl = (redirectUri = null, frontendUrl = null) => {
+  // Se um redirect_uri customizado foi fornecido, criar um novo cliente OAuth2
+  const client = redirectUri 
+    ? new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        redirectUri
+      )
+    : oauth2Client;
+  
+  const authUrlParams = {
     access_type: 'offline',
     scope: SCOPES,
     prompt: 'consent' // Força obter refresh token
-  });
+  };
+  
+  // Se um frontendUrl foi fornecido, adicionar como state para usar no callback
+  if (frontendUrl) {
+    authUrlParams.state = Buffer.from(JSON.stringify({ frontendUrl })).toString('base64');
+  }
+  
+  return client.generateAuthUrl(authUrlParams);
 };
 
-export const getTokensFromCode = async (code) => {
-  const { tokens } = await oauth2Client.getToken(code);
+export const getTokensFromCode = async (code, redirectUri = null) => {
+  const client = redirectUri 
+    ? new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        redirectUri
+      )
+    : oauth2Client;
+  
+  const { tokens } = await client.getToken(code);
   return tokens;
 };
 
