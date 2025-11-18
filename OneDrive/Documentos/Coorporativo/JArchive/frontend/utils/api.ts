@@ -1,14 +1,26 @@
 import axios, { AxiosInstance } from 'axios';
 import type { PhotosResponse, Photo, PhotoFilters, AuthStatus, SyncEvent } from '@/types/photo';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+// No Vercel, as rotas da API estão no mesmo domínio (rotas relativas)
+// Em desenvolvimento, pode usar um backend separado
+function getBaseUrl(): string {
+  // Se estiver em produção no Vercel, usar rotas relativas
+  if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+    return ''; // Rotas relativas
+  }
+  
+  // Em desenvolvimento, usar backend separado se configurado
+  return process.env.NEXT_PUBLIC_BACKEND_URL || '';
+}
+
+const BASE_URL = getBaseUrl();
 
 class ApiClient {
   private client: AxiosInstance;
 
   constructor() {
     this.client = axios.create({
-      baseURL: BACKEND_URL,
+      baseURL: BASE_URL,
       withCredentials: true,
       headers: {
         'Content-Type': 'application/json',
@@ -51,8 +63,13 @@ class ApiClient {
     await this.client.post(`/api/photos/${photoId}/tags`, { tag, tag_type: tagType });
   }
 
+  async setCustomTags(photoId: string, tags: string[]): Promise<string[]> {
+    const { data } = await this.client.put(`/api/photos/${photoId}/custom-tags`, { tags });
+    return data.tags;
+  }
+
   getPhotoStreamUrl(driveId: string): string {
-    return `${BACKEND_URL}/api/photos/stream/${driveId}`;
+    return `${BASE_URL || '/api'}/photos/stream/${driveId}`;
   }
 
   // Folder endpoints
@@ -74,6 +91,11 @@ class ApiClient {
 
   async getEventTypes(): Promise<string[]> {
     const { data } = await this.client.get('/api/stats/types');
+    return data;
+  }
+
+  async getTags(): Promise<string[]> {
+    const { data } = await this.client.get('/api/photos/tags');
     return data;
   }
 
@@ -143,9 +165,13 @@ export const photosApi = {
     if (updates.event_city !== undefined) mappedUpdates.event_city = updates.event_city;
     if (updates.event_year !== undefined) mappedUpdates.event_year = updates.event_year;
     if (updates.event_month !== undefined) mappedUpdates.event_month = updates.event_month;
+    if (updates.role_tag !== undefined) mappedUpdates.role_tag = updates.role_tag;
+    if ((updates as any).role !== undefined) mappedUpdates.role_tag = (updates as any).role;
+    if ((updates as any).cargo !== undefined) mappedUpdates.role_tag = (updates as any).cargo;
     
     // Fazer requisição PUT para /api/photos/:id
-    const response = await axios.put(`${BACKEND_URL}/api/photos/${id}`, mappedUpdates, {
+    const backendUrl = BASE_URL || '/api';
+    const response = await axios.put(`${backendUrl}/photos/${id}`, mappedUpdates, {
       withCredentials: true,
       headers: { 'Content-Type': 'application/json' }
     });
@@ -158,13 +184,17 @@ export const photosApi = {
     if (tags.location !== undefined) updates.location = tags.location;
     if (tags.event_type !== undefined) updates.event_type = tags.event_type;
     
-    const response = await axios.put(`${BACKEND_URL}/api/photos/${photoId}`, updates, {
+    const backendUrl = BASE_URL || '/api';
+    const response = await axios.put(`${backendUrl}/photos/${photoId}`, updates, {
       withCredentials: true,
       headers: { 'Content-Type': 'application/json' }
     });
     
     return response.data;
   },
-  getImageUrl: (photoId: string) => `${BACKEND_URL}/api/photos/${photoId}/image`,
+  getImageUrl: (photoId: string) => {
+    const backendUrl = BASE_URL || '/api';
+    return `${backendUrl}/photos/${photoId}/image`;
+  },
   reanalyzePhotos: (photoIds?: string[], force?: boolean) => api.reanalyzePhotos(photoIds, force),
 };
