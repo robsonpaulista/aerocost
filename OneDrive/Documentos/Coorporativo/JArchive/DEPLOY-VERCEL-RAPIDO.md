@@ -9,6 +9,14 @@ Guia passo a passo para fazer deploy do PhotoFinder no Vercel.
 - [ ] Backend já configurado (Railway, Render, ou outro)
 - [ ] Variáveis de ambiente do backend prontas
 
+## 🔗 Repositório em Conta Diferente?
+
+**Não tem problema!** O Vercel permite conectar repositórios de outras contas GitHub. 
+
+Quando você autorizar o Vercel no GitHub, ele terá acesso aos repositórios que você permitir, mesmo que sejam de contas diferentes.
+
+📖 **Veja o guia completo:** `CONECTAR-GIT-VERCEL.md`
+
 ---
 
 ## 📦 Passo 1: Preparar o Código
@@ -44,7 +52,12 @@ Se funcionar localmente, vai funcionar no Vercel! ✅
 3. **Clique em "Add New Project"**
 4. **Importe seu repositório:**
    - Selecione o repositório do GitHub
+   - ⚠️ **Importante:** Mesmo que o repositório seja de outra conta GitHub, o Vercel pode acessá-lo!
+   - Se não aparecer, clique em **"Configure GitHub App"** e autorize o acesso
    - Clique em "Import"
+
+   
+   **💡 Dica:** O Vercel pedirá permissão para acessar repositórios. Você pode escolher "Only select repositories" para dar acesso apenas ao repositório necessário.
 
 5. **Configure o projeto:**
    - **Framework Preset:** Next.js (detectado automaticamente)

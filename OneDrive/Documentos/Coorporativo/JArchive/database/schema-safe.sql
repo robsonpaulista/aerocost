@@ -1,5 +1,24 @@
--- PhotoFinder Database Schema
+-- PhotoFinder Database Schema (Versão Segura - Pode executar múltiplas vezes)
 -- Execute este script no SQL Editor do Supabase
+-- Esta versão remove objetos existentes antes de criar, evitando erros
+
+-- ============================================
+-- REMOVER OBJETOS EXISTENTES (se houver)
+-- ============================================
+
+-- Remover triggers
+DROP TRIGGER IF EXISTS update_photos_updated_at ON photos;
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
+
+-- Remover views
+DROP VIEW IF EXISTS photos_with_tags;
+
+-- Remover funções
+DROP FUNCTION IF EXISTS update_updated_at_column();
+
+-- ============================================
+-- CRIAR TABELAS
+-- ============================================
 
 -- Criar tabela de fotos
 CREATE TABLE IF NOT EXISTS photos (
@@ -82,6 +101,10 @@ CREATE TABLE IF NOT EXISTS sync_events (
 CREATE INDEX IF NOT EXISTS idx_sync_events_user_id ON sync_events(user_id);
 CREATE INDEX IF NOT EXISTS idx_sync_events_status ON sync_events(status);
 
+-- ============================================
+-- CRIAR FUNÇÕES
+-- ============================================
+
 -- Função para atualizar updated_at automaticamente
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -91,19 +114,25 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- ============================================
+-- CRIAR TRIGGERS
+-- ============================================
+
 -- Trigger para atualizar updated_at na tabela photos
-DROP TRIGGER IF EXISTS update_photos_updated_at ON photos;
 CREATE TRIGGER update_photos_updated_at
 BEFORE UPDATE ON photos
 FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
 
 -- Trigger para atualizar updated_at na tabela users
-DROP TRIGGER IF EXISTS update_users_updated_at ON users;
 CREATE TRIGGER update_users_updated_at
 BEFORE UPDATE ON users
 FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================
+-- CRIAR VIEWS
+-- ============================================
 
 -- View para busca simplificada
 CREATE OR REPLACE VIEW photos_with_tags AS
@@ -114,8 +143,24 @@ FROM photos p
 LEFT JOIN photo_tags pt ON p.id = pt.photo_id
 GROUP BY p.id;
 
--- Comentários nas tabelas
+-- ============================================
+-- COMENTÁRIOS
+-- ============================================
+
 COMMENT ON TABLE photos IS 'Armazena metadados e análises das fotos do Google Drive';
 COMMENT ON TABLE photo_tags IS 'Tags personalizadas associadas às fotos';
 COMMENT ON TABLE users IS 'Usuários autenticados com tokens OAuth do Google';
 COMMENT ON TABLE sync_events IS 'Histórico de sincronizações com o Google Drive';
+
+-- ============================================
+-- VERIFICAÇÃO FINAL
+-- ============================================
+
+-- Verificar tabelas criadas
+SELECT 
+    '✅ Schema executado com sucesso!' as status,
+    COUNT(*) as total_tabelas
+FROM information_schema.tables 
+WHERE table_schema = 'public' 
+  AND table_name IN ('photos', 'photo_tags', 'users', 'sync_events');
+

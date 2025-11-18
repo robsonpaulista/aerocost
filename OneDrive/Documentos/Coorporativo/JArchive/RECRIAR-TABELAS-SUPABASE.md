@@ -1,3 +1,25 @@
+# 🔄 Recriar Tabelas no Supabase
+
+Após restaurar um projeto pausado, as tabelas podem ter sido removidas. Siga este guia para recriá-las:
+
+---
+
+## 🚀 Passo a Passo
+
+### 1. Acesse o SQL Editor do Supabase
+
+1. Vá em: https://supabase.com/dashboard
+2. Selecione seu projeto **photofinder**
+3. No menu lateral, clique em **SQL Editor**
+4. Clique em **New query**
+
+### 2. Execute o Schema Completo
+
+Copie e cole o conteúdo do arquivo `database/schema.sql` no editor SQL e execute.
+
+**Ou execute diretamente:**
+
+```sql
 -- PhotoFinder Database Schema
 -- Execute este script no SQL Editor do Supabase
 
@@ -92,14 +114,12 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger para atualizar updated_at na tabela photos
-DROP TRIGGER IF EXISTS update_photos_updated_at ON photos;
 CREATE TRIGGER update_photos_updated_at
 BEFORE UPDATE ON photos
 FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
 
 -- Trigger para atualizar updated_at na tabela users
-DROP TRIGGER IF EXISTS update_users_updated_at ON users;
 CREATE TRIGGER update_users_updated_at
 BEFORE UPDATE ON users
 FOR EACH ROW
@@ -113,9 +133,98 @@ SELECT
 FROM photos p
 LEFT JOIN photo_tags pt ON p.id = pt.photo_id
 GROUP BY p.id;
+```
 
--- Comentários nas tabelas
-COMMENT ON TABLE photos IS 'Armazena metadados e análises das fotos do Google Drive';
-COMMENT ON TABLE photo_tags IS 'Tags personalizadas associadas às fotos';
-COMMENT ON TABLE users IS 'Usuários autenticados com tokens OAuth do Google';
-COMMENT ON TABLE sync_events IS 'Histórico de sincronizações com o Google Drive';
+### 3. Execute as Migrações (Opcional)
+
+Se você usa funcionalidades avançadas, execute também as migrações:
+
+#### Migração: Reconhecimento Facial
+
+```sql
+-- Execute: database/migrations/add_face_recognition.sql
+```
+
+#### Migração: Role Tag
+
+```sql
+-- Execute: database/migrations/add_role_tag.sql
+```
+
+#### Migração: Auto Tags
+
+```sql
+-- Execute: database/migrations/add_auto_tags.sql
+```
+
+### 4. Verificar se Funcionou
+
+No SQL Editor, execute:
+
+```sql
+-- Verificar tabelas criadas
+SELECT table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'public'
+ORDER BY table_name;
+```
+
+Você deve ver:
+- ✅ `photos`
+- ✅ `photo_tags`
+- ✅ `users`
+- ✅ `sync_events`
+
+### 5. Testar a Conexão
+
+No terminal, execute:
+
+```bash
+node backend/scripts/test-supabase.js
+```
+
+Deve retornar: ✅ Conexão estabelecida!
+
+---
+
+## 📋 Checklist
+
+- [ ] Acessei o SQL Editor do Supabase
+- [ ] Executei o schema.sql completo
+- [ ] Executei as migrações (se necessário)
+- [ ] Verifiquei que as tabelas foram criadas
+- [ ] Testei a conexão com o script
+- [ ] Tentei fazer login na aplicação
+
+---
+
+## 🐛 Troubleshooting
+
+### Erro: "relation already exists"
+
+**Solução:** As tabelas já existem. Isso é normal se você executar o script novamente. O `IF NOT EXISTS` previne erros.
+
+### Erro: "permission denied"
+
+**Solução:** Certifique-se de estar usando a conta de administrador do projeto.
+
+### Erro: "function does not exist"
+
+**Solução:** Execute o schema completo, incluindo a função `update_updated_at_column()`.
+
+---
+
+## 💡 Dica
+
+**Salve o schema como favorito no Supabase:**
+1. Após executar com sucesso
+2. Clique nos 3 pontos (...)
+3. Clique em "Save as favorite"
+4. Nomeie como "PhotoFinder Schema"
+
+Assim você pode recriar rapidamente se necessário!
+
+---
+
+**Pronto!** Após executar o schema, suas tabelas estarão recriadas e a aplicação voltará a funcionar. 🎉
+

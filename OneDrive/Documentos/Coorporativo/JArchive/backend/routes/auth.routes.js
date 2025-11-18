@@ -122,6 +122,18 @@ router.get('/callback', async (req, res) => {
     const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
     const { data: userInfo } = await oauth2.userinfo.get();
 
+    // Validar configuração do Supabase antes de usar
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+      console.error('❌ ERRO: Variáveis do Supabase não configuradas!');
+      console.error('SUPABASE_URL:', process.env.SUPABASE_URL ? '✅ Configurado' : '❌ Faltando');
+      console.error('SUPABASE_SERVICE_KEY:', process.env.SUPABASE_SERVICE_KEY ? '✅ Configurado' : '❌ Faltando');
+      throw new Error('Configuração do Supabase incompleta. Verifique as variáveis de ambiente.');
+    }
+
+    console.log('💾 Tentando salvar usuário no Supabase...');
+    console.log('📧 Email:', userInfo.email);
+    console.log('🆔 Google ID:', userInfo.id);
+
     const { data: user, error: dbError } = await supabase
       .from('users')
       .upsert({
@@ -138,7 +150,22 @@ router.get('/callback', async (req, res) => {
       .single();
 
     if (dbError) {
-      console.error('Erro ao salvar no banco:', dbError);
+      console.error('❌ Erro ao salvar no banco:');
+      console.error('Mensagem:', dbError.message);
+      console.error('Detalhes:', dbError.details);
+      console.error('Hint:', dbError.hint);
+      console.error('Code:', dbError.code);
+      
+      // Se for erro de conexão, dar mensagem mais clara
+      if (dbError.message && dbError.message.includes('fetch failed')) {
+        console.error('🔍 Diagnóstico: Erro de conexão com Supabase');
+        console.error('💡 Verifique:');
+        console.error('   1. SUPABASE_URL está correto?');
+        console.error('   2. SUPABASE_SERVICE_KEY está correto?');
+        console.error('   3. Há firewall bloqueando?');
+        console.error('   4. O Supabase está acessível?');
+      }
+      
       throw dbError;
     }
     

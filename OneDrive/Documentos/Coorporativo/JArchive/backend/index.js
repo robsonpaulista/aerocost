@@ -15,6 +15,7 @@ import geocodingRoutes from './routes/geocoding.routes.js';
 import debugRoutes from './routes/debug.routes.js';
 import analysisRoutes from './routes/analysis.routes.js';
 import faceRoutes from './routes/face.routes.js';
+import keepAliveRoutes from './routes/keep-alive.routes.js';
 import faceRecognitionService from './services/faceRecognition.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -97,6 +98,7 @@ app.use('/api/stats', statsRoutes);
 app.use('/api/geocoding', geocodingRoutes);
 app.use('/api/analysis', analysisRoutes);
 app.use('/api/faces', faceRoutes);
+app.use('/api', keepAliveRoutes);
 
 // Rotas de desenvolvimento (apenas em dev)
 if (process.env.NODE_ENV !== 'production') {

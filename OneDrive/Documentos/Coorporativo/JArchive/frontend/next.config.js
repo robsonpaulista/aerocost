@@ -21,10 +21,10 @@ const nextConfig = {
             try {
               const backendUrl = new URL(process.env.NEXT_PUBLIC_BACKEND_URL);
               return [{
-                protocol: 'https' as const,
+                protocol: 'https',
                 hostname: backendUrl.hostname,
               }];
-            } catch {
+            } catch (e) {
               return [];
             }
           })()
