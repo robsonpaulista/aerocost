@@ -165,6 +165,48 @@ Todas as rotas do backend foram convertidas para Next.js API Routes em `frontend
 
 ## 🐛 Troubleshooting
 
+### Erro: "TypeError: fetch failed" no Callback
+
+**Causa:** Problema de conexão com o Supabase
+
+**Possíveis causas:**
+1. ❌ Supabase pausado (projeto inativo)
+2. ❌ Variáveis de ambiente não configuradas no Vercel
+3. ❌ URL do Supabase incorreta
+4. ❌ Service Key inválida
+
+**Solução:**
+
+1. **Testar conexão com Supabase:**
+   ```bash
+   # Acesse no navegador após o deploy:
+   https://seu-projeto.vercel.app/api/test-supabase
+   ```
+   
+   Isso retornará um JSON com:
+   - Status das variáveis de ambiente
+   - Status da conexão
+   - Erros específicos encontrados
+
+2. **Verificar Supabase Dashboard:**
+   - Acesse [Supabase Dashboard](https://app.supabase.com)
+   - Verifique se o projeto está **ativo** (não pausado)
+   - Se estiver pausado, clique em **Restore** ou **Resume**
+
+3. **Verificar variáveis no Vercel:**
+   - Vá em **Settings → Environment Variables**
+   - Confirme que `SUPABASE_URL` e `SUPABASE_SERVICE_KEY` estão configuradas
+   - **Importante:** Após adicionar/alterar variáveis, faça um novo deploy
+
+4. **Verificar logs do Vercel:**
+   - Vá em **Deployments → [seu deployment] → Functions**
+   - Veja os logs do `/api/auth/callback`
+   - Procure por mensagens de erro detalhadas
+
+5. **Configurar Keep-Alive:**
+   - Configure o cron job para manter o Supabase ativo
+   - Veja seção "Configurar Keep-Alive" acima
+
 ### Erro: "Function exceeded maximum duration"
 
 **Causa:** Função demorou mais de 10 segundos
@@ -188,6 +230,17 @@ Todas as rotas do backend foram convertidas para Next.js API Routes em `frontend
 **Solução:**
 - Verifique se `withCredentials: true` está configurado no axios
 - Verifique se o cookie está sendo definido corretamente no callback
+
+### Erro: "Variáveis do Supabase não configuradas"
+
+**Causa:** Variáveis de ambiente não foram configuradas no Vercel
+
+**Solução:**
+1. Vá em **Settings → Environment Variables** no Vercel
+2. Adicione:
+   - `SUPABASE_URL` (ex: `https://xxxxx.supabase.co`)
+   - `SUPABASE_SERVICE_KEY` (encontre no Supabase Dashboard → Settings → API)
+3. Faça um novo deploy após adicionar as variáveis
 
 ## 📊 Monitoramento
 
