@@ -133,6 +133,13 @@ router.get('/callback', async (req, res) => {
     console.log('💾 Tentando salvar usuário no Supabase...');
     console.log('📧 Email:', userInfo.email);
     console.log('🆔 Google ID:', userInfo.id);
+    
+    // Verificar se a API key está configurada
+    const currentKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
+    if (!currentKey) {
+      throw new Error('SUPABASE_SERVICE_KEY ou SUPABASE_ANON_KEY não encontrado nas variáveis de ambiente');
+    }
+    console.log('🔑 API Key configurada:', currentKey ? `${currentKey.substring(0, 10)}...${currentKey.substring(currentKey.length - 4)}` : '❌ FALTANDO');
 
     const { data: user, error: dbError } = await supabase
       .from('users')

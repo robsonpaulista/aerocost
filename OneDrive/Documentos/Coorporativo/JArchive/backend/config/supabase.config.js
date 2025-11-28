@@ -15,9 +15,17 @@ const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANO
 if (!supabaseUrl || !supabaseKey) {
   console.error('❌ ERRO: Variáveis do Supabase não configuradas!');
   console.error('SUPABASE_URL:', supabaseUrl || '❌ FALTANDO');
-  console.error('SUPABASE_SERVICE_KEY:', supabaseKey ? '✅ Configurado' : '❌ FALTANDO');
+  console.error('SUPABASE_SERVICE_KEY:', process.env.SUPABASE_SERVICE_KEY ? '✅ Configurado' : '❌ FALTANDO');
   console.error('SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? '✅ Configurado' : '❌ FALTANDO');
   throw new Error('Variáveis do Supabase não configuradas. Verifique o arquivo .env');
+}
+
+// Log de configuração (apenas em desenvolvimento, sem expor a chave completa)
+if (process.env.NODE_ENV === 'development') {
+  console.log('✅ Supabase configurado:');
+  console.log('   URL:', supabaseUrl);
+  console.log('   Key:', supabaseKey ? `${supabaseKey.substring(0, 10)}...${supabaseKey.substring(supabaseKey.length - 4)}` : '❌ FALTANDO');
+  console.log('   Tipo:', process.env.SUPABASE_SERVICE_KEY ? 'SERVICE_KEY' : 'ANON_KEY');
 }
 
 // Validar formato da URL
@@ -35,12 +43,38 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
   },
   // Configurações adicionais para resolver problemas de conexão
   global: {
+    headers: {
+      'apikey': supabaseKey,
+      'Authorization': `Bearer ${supabaseKey}`,
+    },
     fetch: (url, options = {}) => {
-      // Adicionar headers padrão se necessário
-      const headers = {
-        ...options.headers,
-        'User-Agent': 'PhotoFinder-Backend/1.0',
-      };
+      // Garantir que a API key está sendo enviada nos headers
+      // O Supabase client já adiciona automaticamente, mas vamos garantir
+      const existingHeaders = options.headers || {};
+      const headers = new Headers(existingHeaders);
+      
+      // Garantir que apikey e Authorization estão presentes
+      if (!headers.has('apikey')) {
+        headers.set('apikey', supabaseKey);
+      }
+      if (!headers.has('Authorization')) {
+        headers.set('Authorization', `Bearer ${supabaseKey}`);
+      }
+      
+      // Content-Type padrão se não especificado
+      if (!headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/json');
+      }
+      
+      // Log para debug (apenas em desenvolvimento)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 Supabase Request:', {
+          url: url.toString().substring(0, 100),
+          hasApikey: headers.has('apikey'),
+          hasAuth: headers.has('Authorization'),
+          method: options.method || 'GET',
+        });
+      }
       
       return fetch(url, {
         ...options,
