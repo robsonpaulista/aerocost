@@ -141,42 +141,94 @@ router.get('/callback', async (req, res) => {
     }
     console.log('🔑 API Key configurada:', currentKey ? `${currentKey.substring(0, 10)}...${currentKey.substring(currentKey.length - 4)}` : '❌ FALTANDO');
 
-    const { data: user, error: dbError } = await supabase
+    // Preparar dados do usuário
+    const userData = {
+      google_id: userInfo.id,
+      email: userInfo.email,
+      name: userInfo.name,
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      token_expiry: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null
+    };
+
+    // Verificar se usuário já existe
+    const { data: existingUser, error: checkError } = await supabase
       .from('users')
-      .upsert({
-        google_id: userInfo.id,
-        email: userInfo.email,
-        name: userInfo.name,
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
-        token_expiry: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null
-      }, {
-        onConflict: 'google_id'
-      })
-      .select()
+      .select('id, google_id, email, name')
+      .eq('google_id', userInfo.id)
       .single();
 
-    if (dbError) {
-      console.error('❌ Erro ao salvar no banco:');
-      console.error('Mensagem:', dbError.message);
-      console.error('Detalhes:', dbError.details);
-      console.error('Hint:', dbError.hint);
-      console.error('Code:', dbError.code);
-      
-      // Se for erro de conexão, dar mensagem mais clara
-      if (dbError.message && dbError.message.includes('fetch failed')) {
-        console.error('🔍 Diagnóstico: Erro de conexão com Supabase');
-        console.error('💡 Verifique:');
-        console.error('   1. SUPABASE_URL está correto?');
-        console.error('   2. SUPABASE_SERVICE_KEY está correto?');
-        console.error('   3. Há firewall bloqueando?');
-        console.error('   4. O Supabase está acessível?');
+    let user;
+    
+    if (checkError && checkError.code !== 'PGRST116') {
+      // Erro diferente de "não encontrado"
+      console.error('❌ Erro ao verificar usuário existente:');
+      console.error('Mensagem:', checkError.message);
+      console.error('Code:', checkError.code);
+      throw checkError;
+    }
+
+    if (existingUser) {
+      // Usuário existe, fazer update
+      console.log('🔄 Usuário já existe, atualizando...');
+      const { data: updatedUser, error: updateError } = await supabase
+        .from('users')
+        .update(userData)
+        .eq('google_id', userInfo.id)
+        .select()
+        .single();
+
+      if (updateError) {
+        console.error('❌ Erro ao atualizar usuário:');
+        console.error('Mensagem:', updateError.message);
+        console.error('Detalhes:', updateError.details);
+        console.error('Code:', updateError.code);
+        throw updateError;
       }
       
-      throw dbError;
+      user = updatedUser;
+      console.log('✅ Usuário atualizado com sucesso:', user.id);
+    } else {
+      // Usuário não existe, fazer insert
+      console.log('➕ Usuário não existe, criando novo...');
+      const { data: newUser, error: insertError } = await supabase
+        .from('users')
+        .insert(userData)
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('❌ Erro ao criar usuário:');
+        console.error('Mensagem:', insertError.message);
+        console.error('Detalhes:', insertError.details);
+        console.error('Code:', insertError.code);
+        
+        // Se for erro de duplicata, tentar fazer update (race condition)
+        if (insertError.code === '23505' || insertError.message.includes('duplicate key')) {
+          console.log('⚠️ Duplicata detectada, tentando update...');
+          const { data: updatedUser, error: updateError } = await supabase
+            .from('users')
+            .update(userData)
+            .eq('google_id', userInfo.id)
+            .select()
+            .single();
+
+          if (updateError) {
+            console.error('❌ Erro ao atualizar após duplicata:');
+            console.error('Mensagem:', updateError.message);
+            throw updateError;
+          }
+          
+          user = updatedUser;
+          console.log('✅ Usuário atualizado após duplicata:', user.id);
+        } else {
+          throw insertError;
+        }
+      } else {
+        user = newUser;
+        console.log('✅ Usuário criado com sucesso:', user.id);
+      }
     }
-    
-    console.log('Usuário salvo com sucesso:', user.id);
 
     // Salvar na sessão
     req.session.userId = user.id;
